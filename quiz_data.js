@@ -1,4 +1,4 @@
-const QUIZ_DATA = [
+let QUIZ_DATA = [
   {
     "test_num": 1,
     "title": "Đề trắc nghiệm số 1",

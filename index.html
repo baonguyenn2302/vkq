@@ -1112,8 +1112,80 @@
     const rawCodeContent = document.getElementById('rawCodeContent');
     const rawModalTitle = document.getElementById('rawModalTitle');
 
+    function shuffle(items) {
+      for (let i = items.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [items[i], items[j]] = [items[j], items[i]];
+      }
+      return items;
+    }
+
+    function generateSessionQuizzes() {
+      const questionMap = new Map();
+      QUIZ_DATA.forEach(test => test.questions.forEach(question => {
+        if (!questionMap.has(question.orig_id)) questionMap.set(question.orig_id, question);
+      }));
+      const questionBank = shuffle(Array.from(questionMap.values()));
+      if (questionBank.length !== 200) {
+        throw new Error(`Expected 200 unique questions, got ${questionBank.length}`);
+      }
+
+      const selectedQuestions = [];
+      for (let i = 0; i < 6; i++) {
+        selectedQuestions.push(questionBank.slice(i * 30, (i + 1) * 30));
+      }
+      selectedQuestions.push([
+        ...questionBank.slice(180),
+        ...shuffle(questionBank.slice(0, 180).slice()).slice(0, 10)
+      ]);
+
+      const letters = ['A', 'B', 'C', 'D'];
+      return selectedQuestions.map((questions, testIndex) => {
+        const correctPositions = shuffle([7, 7, 8, 8]);
+        const positions = shuffle([
+          ...Array(correctPositions[0]).fill(0),
+          ...Array(correctPositions[1]).fill(1),
+          ...Array(correctPositions[2]).fill(2),
+          ...Array(correctPositions[3]).fill(3)
+        ]);
+
+        return {
+          test_num: testIndex + 1,
+          title: `Đề trắc nghiệm số ${testIndex + 1}`,
+          questions: questions.map((question, questionIndex) => {
+            const correctText = question.correct_text;
+            const distractors = shuffle(question.choices
+              .filter(choice => choice.letter !== question.correct_letter)
+              .map(choice => choice.text));
+            let distractorIndex = 0;
+            const correctPosition = positions[questionIndex];
+            const choices = letters.map((letter, position) => ({
+              letter,
+              text: position === correctPosition ? correctText : distractors[distractorIndex++]
+            }));
+            const correctLetter = letters[correctPosition];
+            const titleRaw = question.title_raw.replace(/^Câu\s+\d+\./, `Câu ${questionIndex + 1}.`);
+            const optionsRaw = choices.map(choice =>
+              `${choice.letter === correctLetter ? '*' : ''}${choice.letter}. ${choice.text}`
+            );
+
+            return {
+              ...question,
+              q_num: questionIndex + 1,
+              title_raw: titleRaw,
+              choices,
+              options_raw: optionsRaw,
+              correct_letter: correctLetter,
+              correct_text: correctText
+            };
+          })
+        };
+      });
+    }
+
     // INITIALIZATION
     function init() {
+      QUIZ_DATA = generateSessionQuizzes();
       setupTheme();
       renderTest(0);
       setupTabs();
@@ -1376,9 +1448,9 @@
               <span>⚖️ Đáp án được xáo trộn phân bổ đều: A (~7-8), B (~7-8), C (~7-8), D (~7-8)</span>
             </div>
           </div>
-          <a href="dap_an_7_de.txt" download="dap_an_7_de_vkq.txt" class="btn btn-primary" style="width: auto;">
+          <button id="btnDownloadAnswerKey" class="btn btn-primary" style="width: auto;">
             Tải bảng đáp án (.txt)
-          </a>
+          </button>
         </div>
 
         <div class="key-table-wrapper">
@@ -1414,6 +1486,27 @@
       `;
 
       answerKeyContainer.innerHTML = html;
+      document.getElementById('btnDownloadAnswerKey').addEventListener('click', downloadAnswerKey);
+    }
+
+    function downloadAnswerKey() {
+      const lines = [
+        'BẢNG ĐÁP ÁN 7 ĐỀ QUIZ (MỖI ĐỀ 30 CÂU)',
+        'Được tạo ngẫu nhiên cho phiên làm việc hiện tại.',
+        ''
+      ];
+      QUIZ_DATA.forEach(test => {
+        lines.push(`=== ĐỀ SỐ ${test.test_num} ===`);
+        lines.push(test.questions.map(question => `${String(question.q_num).padStart(2, '0')}. ${question.correct_letter}`).join('   '));
+        lines.push('');
+      });
+      const blob = new Blob([lines.join(String.fromCharCode(10))], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'dap_an_7_de_vkq.txt';
+      link.click();
+      URL.revokeObjectURL(url);
     }
 
     // SHOW BANK (ALL 200 ORIGINAL QUESTIONS)
